@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Mathle - Daily Math Puzzle</title>
+<meta name="description" content="Use math to hit the target number. A new puzzle every day!">
+<meta name="theme-color" content="#121213">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mathle">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#121213;--bg-light:#1a1a1b;--tile:#3a3a3c;--tile-light:#818384;
+    --green:#538d4e;--yellow:#b59f3b;--orange:#e07020;--red:#d32f2f;
+    --text:#fff;--text-dim:#888;--border:#3a3a3c;
+    --key-bg:#818384;--key-text:#fff;
+    --max-width:500px;
+  }
+  html{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;-webkit-tap-highlight-color:transparent}
+  body{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;overflow-x:hidden;background:var(--bg);padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+
+  /* HEADER */
+  header{width:100%;max-width:var(--max-width);display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
+  header h1{font-size:1.6rem;font-weight:800;letter-spacing:2px}
+  .header-btn{background:none;border:none;color:var(--text);cursor:pointer;font-size:1.3rem;padding:4px 8px;border-radius:4px;transition:background .2s}
+  .header-btn:hover{background:var(--tile)}
+  .puzzle-number{font-size:.75rem;color:var(--text-dim);font-weight:400}
+
+  /* MAIN */
+  main{flex:1;width:100%;max-width:var(--max-width);display:flex;flex-direction:column;padding:10px 16px 24px;gap:8px}
+
+  /* TARGET */
+  .target-area{text-align:center;padding:8px 0}
+  .target-label{font-size:.8rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+  .target-number{font-size:2.5rem;font-weight:800;color:var(--green);text-shadow:0 0 20px rgba(83,141,78,.3)}
+
+  /* AVAILABLE NUMBERS */
+  .numbers-area{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:4px 0}
+  .num-chip{background:var(--tile);border:2px solid var(--border);border-radius:8px;padding:8px 14px;font-size:1.1rem;font-weight:700;min-width:44px;text-align:center;transition:all .3s}
+  .num-chip.used{opacity:.35;border-color:transparent}
+
+  /* GUESS HISTORY */
+  .guesses{display:flex;flex-direction:column;gap:6px;min-height:60px}
+  .guess-row{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;animation:slideIn .3s ease}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  .guess-num{font-size:.75rem;color:var(--text-dim);width:16px;text-align:center}
+  .guess-expr{flex:1;font-family:'Courier New',monospace;font-size:1rem;font-weight:600}
+  .guess-result{display:flex;align-items:center;gap:6px;font-weight:700;font-size:.95rem}
+  .guess-equals{font-size:1.1rem;font-weight:700}
+  .guess-value{min-width:40px;text-align:right}
+  .guess-indicator{font-size:1.1rem}
+  .closeness-bar{width:60px;height:6px;background:var(--tile);border-radius:3px;overflow:hidden}
+  .closeness-fill{height:100%;border-radius:3px;transition:width .5s ease}
+
+  .guess-row.exact{background:rgba(83,141,78,.2);border:1px solid var(--green)}
+  .guess-row.close{background:rgba(181,159,59,.15);border:1px solid transparent}
+  .guess-row.medium{background:rgba(224,112,32,.1);border:1px solid transparent}
+  .guess-row.far{background:rgba(211,47,47,.1);border:1px solid transparent}
+
+  /* INPUT AREA */
+  .input-area{margin-top:auto;padding-top:8px}
+  .input-wrapper{display:flex;gap:8px;margin-bottom:10px}
+  .expr-input{flex:1;background:var(--bg-light);border:2px solid var(--border);border-radius:8px;padding:12px 14px;font-size:1.15rem;font-family:'Courier New',monospace;color:var(--text);outline:none;transition:border-color .2s}
+  .expr-input:focus{border-color:var(--green)}
+  .expr-input::placeholder{color:var(--tile-light)}
+  .expr-input:disabled{opacity:.5}
+  .submit-btn{background:var(--green);border:none;border-radius:8px;padding:12px 20px;color:#fff;font-size:1rem;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap}
+  .submit-btn:hover:not(:disabled){background:#5a9c55;transform:scale(1.02)}
+  .submit-btn:disabled{opacity:.4;cursor:not-allowed}
+
+  /* KEYPAD */
+  .keypad{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;padding-bottom:8px}
+  .key{background:var(--key-bg);border:none;border-radius:6px;padding:12px 4px;font-size:1.05rem;font-weight:700;color:var(--key-text);cursor:pointer;transition:all .15s;touch-action:manipulation;user-select:none}
+  .key:active{transform:scale(.93);background:#6a6a6c}
+  .key.op{background:#5a5a5c;color:#ffd54f}
+  .key.action{font-size:.8rem;padding:12px 6px}
+  .key.del{background:#d32f2f}
+  .key.enter{background:var(--green);grid-column:span 2}
+  .key.wide{grid-column:span 2}
+  .key:disabled{opacity:.4;cursor:not-allowed}
+
+  /* ERROR MSG */
+  .error-msg{text-align:center;color:var(--red);font-size:.85rem;min-height:20px;transition:opacity .3s}
+
+  /* GAME OVER */
+  .game-over{text-align:center;padding:20px 0;animation:fadeIn .5s ease}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .game-over h2{font-size:1.5rem;margin-bottom:8px}
+  .game-over .solution{font-family:'Courier New',monospace;font-size:1rem;color:var(--yellow);margin-bottom:16px}
+  .game-over-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .share-btn,.stats-btn2{padding:12px 24px;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;transition:all .2s}
+  .share-btn{background:var(--green);color:#fff}
+  .share-btn:hover{background:#5a9c55}
+  .stats-btn2{background:var(--tile);color:#fff}
+  .stats-btn2:hover{background:#4a4a4c}
+  .copied-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 24px;border-radius:8px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none;z-index:100}
+  .copied-toast.show{opacity:1}
+
+  /* MODALS */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
+  .modal-overlay.active{opacity:1;pointer-events:auto}
+  .modal{background:var(--bg-light);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:420px;width:90%;max-height:85vh;overflow-y:auto}
+  .modal h2{text-align:center;margin-bottom:16px;font-size:1.3rem}
+  .modal p,.modal li{font-size:.9rem;line-height:1.6;color:var(--text-dim);margin-bottom:8px}
+  .modal ul{padding-left:20px}
+  .modal-close{display:block;margin:16px auto 0;background:var(--tile);border:none;color:#fff;padding:10px 28px;border-radius:8px;font-size:.95rem;cursor:pointer}
+  .modal-close:hover{background:#4a4a4c}
+  .modal .example{background:var(--bg);border-radius:6px;padding:10px 14px;font-family:'Courier New',monospace;font-size:.9rem;margin:8px 0;color:var(--text)}
+
+  /* STATS */
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px}
+  .stat-box{text-align:center;padding:10px 4px;background:var(--bg);border-radius:8px}
+  .stat-val{font-size:1.6rem;font-weight:800}
+  .stat-label{font-size:.7rem;color:var(--text-dim);text-transform:uppercase}
+  .dist-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .dist-label{width:14px;font-size:.85rem;text-align:right;color:var(--text-dim)}
+  .dist-bar{height:20px;background:var(--tile);border-radius:3px;min-width:20px;display:flex;align-items:center;justify-content:flex-end;padding:0 6px;font-size:.75rem;font-weight:700;transition:width .5s ease}
+  .dist-bar.highlight{background:var(--green)}
+
+  /* COUNTDOWN */
+  .next-puzzle{text-align:center;margin-top:12px;color:var(--text-dim);font-size:.85rem}
+  .next-puzzle span{font-weight:700;color:var(--text);font-family:'Courier New',monospace}
+</style>
+</head>
+<body>
+
+<header>
+  <button class="header-btn" id="helpBtn" title="How to Play">?</button>
+  <div style="text-align:center">
+    <h1>MATHLE</h1>
+    <div class="puzzle-number" id="puzzleNum"></div>
+  </div>
+  <button class="header-btn" id="statsBtn" title="Statistics">&#x1F4CA;</button>
+</header>
+
+<main>
+  <div class="target-area">
+    <div class="target-label">Target</div>
+    <div class="target-number" id="targetNum">---</div>
+  </div>
+
+  <div class="numbers-area" id="numbersArea"></div>
+
+  <div class="guesses" id="guessesArea"></div>
+
+  <div class="error-msg" id="errorMsg">&nbsp;</div>
+
+  <div id="gameOverArea"></div>
+
+  <div class="input-area" id="inputArea">
+    <div class="input-wrapper">
+      <input type="text" class="expr-input" id="exprInput" placeholder="e.g. 25 * 3 + 50 + 2" autocomplete="off" spellcheck="false">
+      <button class="submit-btn" id="submitBtn">GO</button>
+    </div>
+    <div class="keypad" id="keypad"></div>
+  </div>
+</main>
+
+<div class="copied-toast" id="toast">Copied to clipboard!</div>
+
+<!-- Help Modal -->
+<div class="modal-overlay" id="helpModal">
+  <div class="modal">
+    <h2>How to Play</h2>
+    <p>Use the available numbers and math operations to reach the <strong>target number</strong>.</p>
+    <ul>
+      <li>You have <strong>6 guesses</strong> to hit the target exactly</li>
+      <li>Use <strong>+</strong>, <strong>-</strong>, <strong>*</strong>, <strong>/</strong> and parentheses <strong>( )</strong></li>
+      <li>Each available number can only be used <strong>once</strong></li>
+      <li>You don't have to use all numbers</li>
+    </ul>
+    <p style="margin-top:12px"><strong>Feedback after each guess:</strong></p>
+    <ul>
+      <li><span style="color:var(--green)">Green</span> = exact match!</li>
+      <li><span style="color:var(--yellow)">Yellow</span> = close (within 5)</li>
+      <li><span style="color:var(--orange)">Orange</span> = warm (within 20)</li>
+      <li><span style="color:var(--red)">Gray</span> = far off</li>
+    </ul>
+    <div class="example">Example: 25 * (7 + 3) + 50</div>
+    <p>A new puzzle appears every day at midnight!</p>
+    <button class="modal-close" id="helpClose">Got it!</button>
+  </div>
+</div>
+
+<!-- Stats Modal -->
+<div class="modal-overlay" id="statsModal">
+  <div class="modal">
+    <h2>Statistics</h2>
+    <div class="stats-grid" id="statsGrid"></div>
+    <h3 style="text-align:center;margin-bottom:10px;font-size:.95rem">Guess Distribution</h3>
+    <div id="distChart"></div>
+    <div class="next-puzzle" id="nextPuzzle"></div>
+    <button class="modal-close" id="statsClose">Close</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// SEEDED PRNG (mulberry32)
+// ============================================================
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function dateSeed(dateStr) {
+  let h = 0;
+  for (let i = 0; i < dateStr.length; i++) {
+    h = Math.imul(31, h) + dateStr.charCodeAt(i) | 0;
+  }
+  return h;
+}
+
+function getTodayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Puzzle number = days since launch
+function getPuzzleNumber(dateStr) {
+  const launch = new Date('2025-03-01');
+  const today = new Date(dateStr);
+  return Math.floor((today - launch) / 86400000) + 1;
+}
+
+// ============================================================
+// PUZZLE GENERATION
+// ============================================================
+function generatePuzzle(dateStr) {
+  const rng = mulberry32(dateSeed(dateStr));
+  const randInt = (min, max) => min + Math.floor(rng() * (max - min + 1));
+  const pick = arr => arr[Math.floor(rng() * arr.length)];
+
+  const largeNums = [25, 50, 75, 100];
+  const smallNums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+  // Pick 2 large, 4 small
+  const available = [];
+  const usedLarge = new Set();
+  for (let i = 0; i < 2; i++) {
+    let n;
+    do { n = pick(largeNums); } while (usedLarge.has(n));
+    usedLarge.add(n);
+    available.push(n);
+  }
+  for (let i = 0; i < 4; i++) {
+    available.push(pick(smallNums));
+  }
+
+  // Build a solvable expression using 3-5 numbers
+  const numCount = randInt(3, 5);
+  const indices = [];
+  const pool = [...Array(6).keys()];
+  for (let i = 0; i < numCount; i++) {
+    const idx = Math.floor(rng() * pool.length);
+    indices.push(pool[idx]);
+    pool.splice(idx, 1);
+  }
+  const chosenNums = indices.map(i => available[i]);
+
+  // Build expression tree and compute target
+  let result = chosenNums[0];
+  const ops = ['+', '-', '*'];
+  const exprParts = [String(chosenNums[0])];
+
+  for (let i = 1; i < chosenNums.length; i++) {
+    const op = pick(ops);
+    const n = chosenNums[i];
+    if (op === '+') {
+      result += n;
+      exprParts.push('+', String(n));
+    } else if (op === '-') {
+      result -= n;
+      exprParts.push('-', String(n));
+    } else {
+      result *= n;
+      // Wrap previous in parens for clarity
+      const prev = exprParts.join(' ');
+      exprParts.length = 0;
+      exprParts.push('(' + prev + ')', '*', String(n));
+    }
+  }
+
+  // Ensure target is in a good range (100-999) and positive
+  let target = result;
+  let attempts = 0;
+  while ((target < 100 || target > 999 || target !== Math.floor(target) || target <= 0) && attempts < 50) {
+    // Regenerate with different ops
+    result = chosenNums[0];
+    exprParts.length = 0;
+    exprParts.push(String(chosenNums[0]));
+    for (let i = 1; i < chosenNums.length; i++) {
+      const op = pick(['+', '-', '*', '+', '+']);
+      const n = chosenNums[i];
+      if (op === '+') { result += n; exprParts.push('+', String(n)); }
+      else if (op === '-') { result -= n; exprParts.push('-', String(n)); }
+      else { result *= n; const prev = exprParts.join(' '); exprParts.length = 0; exprParts.push('(' + prev + ')', '*', String(n)); }
+    }
+    target = result;
+    attempts++;
+  }
+
+  // Fallback: if we still can't get a good target, use simple addition + multiplication
+  if (target < 100 || target > 999 || target !== Math.floor(target) || target <= 0) {
+    target = available[0] * available[2] + available[1] + available[3];
+    if (target < 100 || target > 999) {
+      target = available[0] * available[3] + available[1] * available[2];
+    }
+    if (target < 100) target = available[0] * (available[2] + available[3]) + available[1];
+    if (target > 999) target = available[0] + available[1] * available[2] + available[3];
+  }
+
+  // Sort available for display
+  available.sort((a, b) => a - b);
+
+  return {
+    target: Math.abs(Math.floor(target)),
+    available,
+    solution: exprParts.join(' ')
+  };
+}
+
+// ============================================================
+// SAFE EXPRESSION PARSER
+// ============================================================
+function tokenize(expr) {
+  const tokens = [];
+  let i = 0;
+  const s = expr.replace(/\s+/g, '');
+  while (i < s.length) {
+    if (s[i] >= '0' && s[i] <= '9') {
+      let num = '';
+      while (i < s.length && s[i] >= '0' && s[i] <= '9') { num += s[i]; i++; }
+      tokens.push({ type: 'num', value: parseInt(num, 10) });
+    } else if ('+-*/'.includes(s[i])) {
+      tokens.push({ type: 'op', value: s[i] }); i++;
+    } else if (s[i] === '(') {
+      tokens.push({ type: 'lparen' }); i++;
+    } else if (s[i] === ')') {
+      tokens.push({ type: 'rparen' }); i++;
+    } else {
+      throw new Error(`Invalid character: ${s[i]}`);
+    }
+  }
+  return tokens;
+}
+
+// Recursive descent parser
+function parseExpr(tokens, pos) {
+  let [left, nextPos] = parseTerm(tokens, pos);
+  while (nextPos < tokens.length && tokens[nextPos].type === 'op' && (tokens[nextPos].value === '+' || tokens[nextPos].value === '-')) {
+    const op = tokens[nextPos].value;
+    let right;
+    [right, nextPos] = parseTerm(tokens, nextPos + 1);
+    left = op === '+' ? left + right : left - right;
+  }
+  return [left, nextPos];
+}
+
+function parseTerm(tokens, pos) {
+  let [left, nextPos] = parseFactor(tokens, pos);
+  while (nextPos < tokens.length && tokens[nextPos].type === 'op' && (tokens[nextPos].value === '*' || tokens[nextPos].value === '/')) {
+    const op = tokens[nextPos].value;
+    let right;
+    [right, nextPos] = parseFactor(tokens, nextPos + 1);
+    left = op === '*' ? left * right : left / right;
+  }
+  return [left, nextPos];
+}
+
+function parseFactor(tokens, pos) {
+  if (pos >= tokens.length) throw new Error('Unexpected end of expression');
+  if (tokens[pos].type === 'lparen') {
+    const [val, nextPos] = parseExpr(tokens, pos + 1);
+    if (nextPos >= tokens.length || tokens[nextPos].type !== 'rparen') throw new Error('Missing closing parenthesis');
+    return [val, nextPos + 1];
+  }
+  if (tokens[pos].type === 'num') {
+    return [tokens[pos].value, pos + 1];
+  }
+  // Handle negative sign at start or after open paren
+  if (tokens[pos].type === 'op' && tokens[pos].value === '-') {
+    const [val, nextPos] = parseFactor(tokens, pos + 1);
+    return [-val, nextPos];
+  }
+  throw new Error('Unexpected token');
+}
+
+function safeEval(expr) {
+  const tokens = tokenize(expr);
+  if (tokens.length === 0) throw new Error('Empty expression');
+  const [result, endPos] = parseExpr(tokens, 0);
+  if (endPos !== tokens.length) throw new Error('Unexpected tokens after expression');
+  return result;
+}
+
+// Extract numbers used in expression
+function extractNumbers(expr) {
+  const matches = expr.replace(/\s+/g, '').match(/\d+/g);
+  return matches ? matches.map(Number) : [];
+}
+
+// Validate that expression only uses available numbers (each once)
+function validateNumbers(exprNums, available) {
+  const pool = [...available];
+  for (const n of exprNums) {
+    const idx = pool.indexOf(n);
+    if (idx === -1) return { valid: false, msg: `Number ${n} is not available or already used` };
+    pool.splice(idx, 1);
+  }
+  return { valid: true };
+}
+
+// ============================================================
+// GAME STATE
+// ============================================================
+const STORAGE_KEY = 'mathle_state';
+const STATS_KEY = 'mathle_stats';
+const MAX_GUESSES = 6;
+
+let puzzle = null;
+let guesses = [];
+let gameOver = false;
+let gameWon = false;
+let todayStr = getTodayStr();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function saveState() {
+  const state = { date: todayStr, guesses, gameOver, gameWon };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function loadStats() {
+  try {
+    const raw = localStorage.getItem(STATS_KEY);
+    if (!raw) return { played: 0, won: 0, streak: 0, maxStreak: 0, dist: [0,0,0,0,0,0] };
+    return JSON.parse(raw);
+  } catch { return { played: 0, won: 0, streak: 0, maxStreak: 0, dist: [0,0,0,0,0,0] }; }
+}
+
+function saveStats(stats) {
+  localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+}
+
+function recordResult(won, numGuesses) {
+  const stats = loadStats();
+  stats.played++;
+  if (won) {
+    stats.won++;
+    stats.streak++;
+    if (stats.streak > stats.maxStreak) stats.maxStreak = stats.streak;
+    stats.dist[numGuesses - 1]++;
+  } else {
+    stats.streak = 0;
+  }
+  saveStats(stats);
+}
+
+// ============================================================
+// UI RENDERING
+// ============================================================
+const $id = id => document.getElementById(id);
+const targetEl = $id('targetNum');
+const numbersEl = $id('numbersArea');
+const guessesEl = $id('guessesArea');
+const inputEl = $id('exprInput');
+const submitEl = $id('submitBtn');
+const errorEl = $id('errorMsg');
+const gameOverEl = $id('gameOverArea');
+const inputAreaEl = $id('inputArea');
+const keypadEl = $id('keypad');
+const puzzleNumEl = $id('puzzleNum');
+const toast = $id('toast');
+
+function renderTarget() {
+  targetEl.textContent = puzzle.target;
+  puzzleNumEl.textContent = `#${getPuzzleNumber(todayStr)}`;
+}
+
+function renderNumbers() {
+  const usedNums = [];
+  guesses.forEach(g => {
+    extractNumbers(g.expr).forEach(n => usedNums.push(n));
+  });
+
+  numbersEl.innerHTML = '';
+  puzzle.available.forEach(n => {
+    const chip = document.createElement('div');
+    chip.className = 'num-chip';
+    chip.textContent = n;
+    numbersEl.appendChild(chip);
+  });
+}
+
+function getCloseness(result, target) {
+  const diff = Math.abs(result - target);
+  if (diff === 0) return { cls: 'exact', color: 'var(--green)', pct: 100, label: 'Exact!', icon: '=' };
+  if (diff <= 5) return { cls: 'close', color: 'var(--yellow)', pct: 85, label: `Off by ${diff}`, icon: result > target ? '\u2193' : '\u2191' };
+  if (diff <= 20) return { cls: 'medium', color: 'var(--orange)', pct: 55, label: `Off by ${diff}`, icon: result > target ? '\u2193' : '\u2191' };
+  const farPct = Math.max(10, 50 - diff / 10);
+  return { cls: 'far', color: 'var(--red)', pct: farPct, label: `Off by ${diff}`, icon: result > target ? '\u2193' : '\u2191' };
+}
+
+function renderGuesses() {
+  guessesEl.innerHTML = '';
+  guesses.forEach((g, i) => {
+    const c = getCloseness(g.result, puzzle.target);
+    const row = document.createElement('div');
+    row.className = `guess-row ${c.cls}`;
+    row.innerHTML = `
+      <span class="guess-num">${i + 1}</span>
+      <span class="guess-expr">${escHtml(g.expr)}</span>
+      <span class="guess-result">
+        <span class="guess-equals">=</span>
+        <span class="guess-value" style="color:${c.color}">${Number.isInteger(g.result) ? g.result : g.result.toFixed(2)}</span>
+        <span class="guess-indicator">${c.icon}</span>
+      </span>
+      <div class="closeness-bar"><div class="closeness-fill" style="width:${c.pct}%;background:${c.color}"></div></div>
+    `;
+    guessesEl.appendChild(row);
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderKeypad() {
+  const keys = [
+    ...puzzle.available.map(n => ({ label: String(n), value: String(n), cls: '' })),
+    { label: '+', value: '+', cls: 'op' },
+    { label: '-', value: '-', cls: 'op' },
+    { label: '\u00D7', value: '*', cls: 'op' },
+    { label: '\u00F7', value: '/', cls: 'op' },
+    { label: '(', value: '(', cls: 'op' },
+    { label: ')', value: ')', cls: 'op' },
+    { label: 'DEL', value: 'DEL', cls: 'action del' },
+    { label: 'CLR', value: 'CLR', cls: 'action' },
+    { label: 'SUBMIT', value: 'SUBMIT', cls: 'action enter' },
+  ];
+
+  keypadEl.innerHTML = '';
+  keys.forEach(k => {
+    const btn = document.createElement('button');
+    btn.className = `key ${k.cls}`;
+    btn.textContent = k.label;
+    btn.dataset.value = k.value;
+    if (gameOver) btn.disabled = true;
+    btn.addEventListener('click', () => handleKey(k.value));
+    keypadEl.appendChild(btn);
+  });
+}
+
+function handleKey(val) {
+  if (gameOver) return;
+  if (val === 'DEL') {
+    inputEl.value = inputEl.value.slice(0, -1);
+  } else if (val === 'CLR') {
+    inputEl.value = '';
+  } else if (val === 'SUBMIT') {
+    submitGuess();
+  } else {
+    // Add a space before operators for readability
+    if ('+-*/'.includes(val) && inputEl.value.length > 0 && !inputEl.value.endsWith(' ') && !inputEl.value.endsWith('(')) {
+      inputEl.value += ' ' + val + ' ';
+    } else {
+      inputEl.value += val;
+    }
+  }
+  inputEl.focus();
+}
+
+function showError(msg) {
+  errorEl.textContent = msg;
+  errorEl.style.opacity = '1';
+  setTimeout(() => { errorEl.style.opacity = '0'; }, 3000);
+}
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+function renderGameOver() {
+  if (!gameOver) {
+    gameOverEl.innerHTML = '';
+    inputAreaEl.style.display = '';
+    return;
+  }
+
+  inputAreaEl.style.display = 'none';
+  const attemptsText = gameWon ? `Solved in ${guesses.length}/${MAX_GUESSES}` : `Not solved`;
+  const solutionHtml = !gameWon ? `<div class="solution">Solution: ${escHtml(puzzle.solution)} = ${puzzle.target}</div>` : '';
+
+  gameOverEl.innerHTML = `
+    <div class="game-over">
+      <h2>${gameWon ? 'Brilliant!' : 'Better luck tomorrow!'}</h2>
+      <p style="color:var(--text-dim);margin-bottom:4px">${attemptsText}</p>
+      ${solutionHtml}
+      <div class="game-over-btns">
+        <button class="share-btn" onclick="shareResults()">Share</button>
+        <button class="stats-btn2" onclick="showStats()">Stats</button>
+      </div>
+    </div>
+  `;
+
+  // Disable keypad
+  document.querySelectorAll('.key').forEach(k => k.disabled = true);
+}
+
+// ============================================================
+// GAME LOGIC
+// ============================================================
+function submitGuess() {
+  if (gameOver) return;
+
+  const expr = inputEl.value.trim();
+  if (!expr) { showError('Enter an expression'); return; }
+
+  // Parse and validate
+  let result;
+  try {
+    result = safeEval(expr);
+  } catch (e) {
+    showError(e.message || 'Invalid expression');
+    return;
+  }
+
+  if (!isFinite(result)) {
+    showError('Expression results in infinity (division by zero?)');
+    return;
+  }
+
+  // Validate numbers used
+  const usedNums = extractNumbers(expr);
+  if (usedNums.length === 0) {
+    showError('Use at least one available number');
+    return;
+  }
+  const validation = validateNumbers(usedNums, puzzle.available);
+  if (!validation.valid) {
+    showError(validation.msg);
+    return;
+  }
+
+  // Record guess
+  guesses.push({ expr, result });
+  inputEl.value = '';
+
+  // Check win
+  if (Math.abs(result - puzzle.target) < 0.0001) {
+    gameOver = true;
+    gameWon = true;
+    recordResult(true, guesses.length);
+  } else if (guesses.length >= MAX_GUESSES) {
+    gameOver = true;
+    gameWon = false;
+    recordResult(false, guesses.length);
+  }
+
+  saveState();
+  renderGuesses();
+  renderNumbers();
+  renderGameOver();
+  renderKeypad();
+}
+
+// ============================================================
+// SHARE
+// ============================================================
+function shareResults() {
+  const num = getPuzzleNumber(todayStr);
+  const lines = [`Mathle #${num}`, `Target: ${puzzle.target}`];
+  const squares = guesses.map(g => {
+    const diff = Math.abs(g.result - puzzle.target);
+    if (diff === 0) return '\uD83D\uDFE9';
+    if (diff <= 5) return '\uD83D\uDFE8';
+    if (diff <= 20) return '\uD83D\uDFE7';
+    return '\u2B1B';
+  });
+  lines.push(squares.join('') + (gameWon ? ` (${guesses.length}/${MAX_GUESSES})` : ` X/${MAX_GUESSES}`));
+  lines.push('');
+
+  const text = lines.join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Copied to clipboard!');
+  }).catch(() => {
+    showToast('Could not copy');
+  });
+}
+
+// ============================================================
+// STATS MODAL
+// ============================================================
+function showStats() {
+  const stats = loadStats();
+  const winPct = stats.played > 0 ? Math.round(stats.won / stats.played * 100) : 0;
+
+  $id('statsGrid').innerHTML = `
+    <div class="stat-box"><div class="stat-val">${stats.played}</div><div class="stat-label">Played</div></div>
+    <div class="stat-box"><div class="stat-val">${winPct}</div><div class="stat-label">Win %</div></div>
+    <div class="stat-box"><div class="stat-val">${stats.streak}</div><div class="stat-label">Streak</div></div>
+    <div class="stat-box"><div class="stat-val">${stats.maxStreak}</div><div class="stat-label">Max Streak</div></div>
+  `;
+
+  const maxDist = Math.max(1, ...stats.dist);
+  $id('distChart').innerHTML = stats.dist.map((count, i) => {
+    const pct = Math.max(8, count / maxDist * 100);
+    const hl = gameOver && gameWon && guesses.length === i + 1 ? ' highlight' : '';
+    return `<div class="dist-row"><span class="dist-label">${i + 1}</span><div class="dist-bar${hl}" style="width:${pct}%">${count}</div></div>`;
+  }).join('');
+
+  // Next puzzle countdown
+  const now = new Date();
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const diff = tomorrow - now;
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  $id('nextPuzzle').innerHTML = `Next puzzle in <span>${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</span>`;
+
+  $id('statsModal').classList.add('active');
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  todayStr = getTodayStr();
+  puzzle = generatePuzzle(todayStr);
+
+  // Load saved state
+  const saved = loadState();
+  if (saved && saved.date === todayStr) {
+    guesses = saved.guesses || [];
+    gameOver = saved.gameOver || false;
+    gameWon = saved.gameWon || false;
+  } else {
+    guesses = [];
+    gameOver = false;
+    gameWon = false;
+  }
+
+  renderTarget();
+  renderNumbers();
+  renderGuesses();
+  renderKeypad();
+  renderGameOver();
+
+  // Show help on first visit
+  if (!localStorage.getItem('mathle_visited')) {
+    $id('helpModal').classList.add('active');
+    localStorage.setItem('mathle_visited', '1');
+  }
+}
+
+// EVENT LISTENERS
+submitEl.addEventListener('click', submitGuess);
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); submitGuess(); }
+});
+
+$id('helpBtn').addEventListener('click', () => $id('helpModal').classList.add('active'));
+$id('helpClose').addEventListener('click', () => $id('helpModal').classList.remove('active'));
+$id('statsBtn').addEventListener('click', showStats);
+$id('statsClose').addEventListener('click', () => $id('statsModal').classList.remove('active'));
+
+// Close modals on overlay click
+['helpModal', 'statsModal'].forEach(id => {
+  $id(id).addEventListener('click', e => {
+    if (e.target === $id(id)) $id(id).classList.remove('active');
+  });
+});
+
+// Keyboard support: allow typing directly
+document.addEventListener('keydown', e => {
+  if (e.target === inputEl) return;
+  if (document.querySelector('.modal-overlay.active')) return;
+  if (gameOver) return;
+  if (e.key === 'Backspace') { inputEl.value = inputEl.value.slice(0, -1); e.preventDefault(); }
+  else if (e.key === 'Enter') { submitGuess(); e.preventDefault(); }
+  else if (/^[0-9+\-*/() ]$/.test(e.key)) { inputEl.focus(); }
+});
+
+init();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>

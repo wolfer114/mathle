@@ -12,6 +12,9 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   :root{
@@ -125,6 +128,13 @@
   /* COUNTDOWN */
   .next-puzzle{text-align:center;margin-top:12px;color:var(--text-dim);font-size:.85rem}
   .next-puzzle span{font-weight:700;color:var(--text);font-family:'Courier New',monospace}
+
+  /* AUTH */
+  .auth-btn{background:none;border:1px solid var(--border);border-radius:20px;color:var(--text);cursor:pointer;padding:4px 12px;font-size:.75rem;display:flex;align-items:center;gap:6px;transition:background .2s}
+  .auth-btn:hover{background:var(--tile)}
+  .auth-avatar{width:24px;height:24px;border-radius:50%;border:1px solid var(--border)}
+  .auth-name{max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+  .sync-badge{font-size:.65rem;color:var(--green);text-align:center;margin-top:2px}
 </style>
 </head>
 <body>
@@ -135,7 +145,10 @@
     <h1>MATHLE</h1>
     <div class="puzzle-number" id="puzzleNum"></div>
   </div>
-  <button class="header-btn" id="statsBtn" title="Statistics">&#x1F4CA;</button>
+  <div style="display:flex;align-items:center;gap:6px">
+    <button class="header-btn" id="statsBtn" title="Statistics">&#x1F4CA;</button>
+    <button class="auth-btn" id="authBtn" title="Sign in to sync stats">Sign in</button>
+  </div>
 </header>
 
 <main>
@@ -200,6 +213,23 @@
 </div>
 
 <script>
+// ============================================================
+// FIREBASE INIT
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBccfEnW60MCV-WgO2Hmyc3lNiuMfkgbkQ",
+  authDomain: "mathle-15b6e.firebaseapp.com",
+  projectId: "mathle-15b6e",
+  storageBucket: "mathle-15b6e.firebasestorage.app",
+  messagingSenderId: "209888154414",
+  appId: "1:209888154414:web:66e94cc06b72824d0560bf",
+  measurementId: "G-XGVRQES3KP"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+let currentUser = null;
+
 // ============================================================
 // SEEDED PRNG (mulberry32)
 // ============================================================
@@ -446,16 +476,43 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+const DEFAULT_STATS = { played: 0, won: 0, streak: 0, maxStreak: 0, dist: [0,0,0,0,0,0] };
+
 function loadStats() {
   try {
     const raw = localStorage.getItem(STATS_KEY);
-    if (!raw) return { played: 0, won: 0, streak: 0, maxStreak: 0, dist: [0,0,0,0,0,0] };
+    if (!raw) return { ...DEFAULT_STATS, dist: [...DEFAULT_STATS.dist] };
     return JSON.parse(raw);
-  } catch { return { played: 0, won: 0, streak: 0, maxStreak: 0, dist: [0,0,0,0,0,0] }; }
+  } catch { return { ...DEFAULT_STATS, dist: [...DEFAULT_STATS.dist] }; }
 }
 
 function saveStats(stats) {
   localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  if (currentUser) {
+    db.collection('users').doc(currentUser.uid).set({ stats }, { merge: true });
+  }
+}
+
+async function loadCloudStats() {
+  if (!currentUser) return null;
+  try {
+    const doc = await db.collection('users').doc(currentUser.uid).get();
+    if (doc.exists && doc.data().stats) return doc.data().stats;
+  } catch {}
+  return null;
+}
+
+function mergeStats(local, cloud) {
+  if (!cloud) return local;
+  const merged = { ...DEFAULT_STATS, dist: [...DEFAULT_STATS.dist] };
+  merged.played = Math.max(local.played, cloud.played);
+  merged.won = Math.max(local.won, cloud.won);
+  merged.streak = Math.max(local.streak, cloud.streak);
+  merged.maxStreak = Math.max(local.maxStreak, cloud.maxStreak);
+  for (let i = 0; i < 6; i++) {
+    merged.dist[i] = Math.max(local.dist[i] || 0, cloud.dist[i] || 0);
+  }
+  return merged;
 }
 
 function recordResult(won, numGuesses) {
@@ -797,6 +854,43 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Backspace') { inputEl.value = inputEl.value.slice(0, -1); e.preventDefault(); }
   else if (e.key === 'Enter') { submitGuess(); e.preventDefault(); }
   else if (/^[0-9+\-*/() ]$/.test(e.key)) { inputEl.focus(); }
+});
+
+// ============================================================
+// AUTH
+// ============================================================
+const authBtn = $id('authBtn');
+
+function updateAuthUI(user) {
+  if (user) {
+    const photo = user.photoURL ? `<img class="auth-avatar" src="${user.photoURL}" referrerpolicy="no-referrer">` : '';
+    const name = user.displayName ? user.displayName.split(' ')[0] : 'You';
+    authBtn.innerHTML = `${photo}<span class="auth-name">${escHtml(name)}</span>`;
+    authBtn.title = 'Sign out';
+  } else {
+    authBtn.innerHTML = 'Sign in';
+    authBtn.title = 'Sign in to sync stats';
+  }
+}
+
+authBtn.addEventListener('click', async () => {
+  if (currentUser) {
+    await auth.signOut();
+  } else {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try { await auth.signInWithPopup(provider); } catch {}
+  }
+});
+
+auth.onAuthStateChanged(async (user) => {
+  currentUser = user;
+  updateAuthUI(user);
+  if (user) {
+    const cloud = await loadCloudStats();
+    const local = loadStats();
+    const merged = mergeStats(local, cloud);
+    saveStats(merged);
+  }
 });
 
 init();

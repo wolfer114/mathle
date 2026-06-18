@@ -175,7 +175,7 @@
 
   <div class="input-area" id="inputArea">
     <div class="input-wrapper">
-      <input type="text" class="expr-input" id="exprInput" placeholder="e.g. 25 * 3 + 50 + 2" autocomplete="off" spellcheck="false" inputmode="none">
+      <input type="text" class="expr-input" id="exprInput" placeholder="e.g. 25 * 3 + 50 + 2" autocomplete="off" spellcheck="false" readonly>
       <button class="submit-btn" id="submitBtn">GO</button>
     </div>
     <div class="keypad" id="keypad"></div>
@@ -867,14 +867,14 @@ $id('statsClose').addEventListener('click', () => $id('statsModal').classList.re
   });
 });
 
-// Keyboard support: allow typing directly
+// Keyboard support: type directly via keypad-style handling
 document.addEventListener('keydown', e => {
-  if (e.target === inputEl) return;
   if (document.querySelector('.modal-overlay.active')) return;
   if (gameOver) return;
   if (e.key === 'Backspace') { inputEl.value = inputEl.value.slice(0, -1); e.preventDefault(); }
   else if (e.key === 'Enter') { submitGuess(); e.preventDefault(); }
-  else if (/^[0-9+\-*/() ]$/.test(e.key)) { inputEl.focus(); }
+  else if (/^[0-9()] *$/.test(e.key)) { inputEl.value += e.key; e.preventDefault(); }
+  else if (/^[+\-*/]$/.test(e.key)) { handleKey(e.key); e.preventDefault(); }
 });
 
 // ============================================================

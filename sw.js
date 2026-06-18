@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mathle-v4';
+const CACHE_NAME = 'mathle-v5';
 
 self.addEventListener('install', e => {
   e.waitUntil(

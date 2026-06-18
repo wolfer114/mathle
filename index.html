@@ -482,9 +482,14 @@ function loadState() {
 function saveState() {
   const state = { date: todayStr, guesses, gameOver, gameWon };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  if (currentUser) {
-    db.collection('users').doc(currentUser.uid).set({ gameState: state }, { merge: true });
-  }
+  syncStateToCloud(state);
+}
+
+function syncStateToCloud(state) {
+  if (!currentUser) return;
+  db.collection('users').doc(currentUser.uid).set({ gameState: state }, { merge: true })
+    .then(() => console.log('Game state synced'))
+    .catch(e => console.error('Sync failed:', e));
 }
 
 const DEFAULT_STATS = { played: 0, won: 0, streak: 0, maxStreak: 0, dist: [0,0,0,0,0,0] };
@@ -894,7 +899,13 @@ authBtn.addEventListener('click', async () => {
     await auth.signOut();
   } else {
     const provider = new firebase.auth.GoogleAuthProvider();
-    try { await auth.signInWithPopup(provider); } catch {}
+    try {
+      await auth.signInWithPopup(provider);
+    } catch (e) {
+      if (e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-browser') {
+        auth.signInWithRedirect(provider);
+      }
+    }
   }
 });
 
@@ -902,24 +913,40 @@ auth.onAuthStateChanged(async (user) => {
   currentUser = user;
   updateAuthUI(user);
   if (user) {
-    const cloud = await loadCloudData();
-    const local = loadStats();
-    const merged = mergeStats(local, cloud.stats);
-    saveStats(merged);
+    try {
+      const cloud = await loadCloudData();
 
-    if (cloud.gameState && cloud.gameState.date === todayStr) {
+      // Merge stats
+      const local = loadStats();
+      const merged = mergeStats(local, cloud.stats);
+      saveStats(merged);
+
+      // Restore game state from cloud if it's ahead of local
       const localState = loadState();
       const localGuesses = localState && localState.date === todayStr ? localState.guesses.length : 0;
-      if (cloud.gameState.guesses.length > localGuesses) {
-        guesses = cloud.gameState.guesses;
-        gameOver = cloud.gameState.gameOver;
-        gameWon = cloud.gameState.gameWon;
-        saveState();
-        renderGuesses();
-        renderNumbers();
-        renderGameOver();
-        renderKeypad();
+      const localGameOver = localState && localState.date === todayStr ? localState.gameOver : false;
+
+      if (cloud.gameState && cloud.gameState.date === todayStr) {
+        const cloudAhead = cloud.gameState.guesses.length > localGuesses ||
+                           (cloud.gameState.gameOver && !localGameOver);
+        if (cloudAhead) {
+          guesses = cloud.gameState.guesses;
+          gameOver = cloud.gameState.gameOver;
+          gameWon = cloud.gameState.gameWon;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: todayStr, guesses, gameOver, gameWon }));
+          renderGuesses();
+          renderNumbers();
+          renderGameOver();
+          renderKeypad();
+        }
       }
+
+      // If local has state that cloud doesn't, push local to cloud
+      if (localGuesses > 0 && (!cloud.gameState || cloud.gameState.date !== todayStr || localGuesses > cloud.gameState.guesses.length)) {
+        syncStateToCloud({ date: todayStr, guesses, gameOver, gameWon });
+      }
+    } catch (e) {
+      console.error('Auth sync error:', e);
     }
   }
 });

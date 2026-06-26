@@ -279,6 +279,18 @@ function getPuzzleNumber(dateStr) {
 // ============================================================
 // PUZZLE GENERATION
 // ============================================================
+function canReachByAdding(nums, target) {
+  const n = nums.length;
+  for (let mask = 1; mask < (1 << n); mask++) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) {
+      if (mask & (1 << i)) sum += nums[i];
+    }
+    if (sum === target) return true;
+  }
+  return false;
+}
+
 function generatePuzzle(dateStr) {
   const rng = mulberry32(dateSeed(dateStr));
   const randInt = (min, max) => min + Math.floor(rng() * (max - min + 1));
@@ -287,81 +299,102 @@ function generatePuzzle(dateStr) {
   const largeNums = [25, 50, 75, 100];
   const smallNums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-  // Pick 2 large, 4 small
-  const available = [];
-  const usedLarge = new Set();
-  for (let i = 0; i < 2; i++) {
-    let n;
-    do { n = pick(largeNums); } while (usedLarge.has(n));
-    usedLarge.add(n);
-    available.push(n);
-  }
-  for (let i = 0; i < 4; i++) {
-    available.push(pick(smallNums));
-  }
+  let available, target, exprParts;
+  let outerAttempts = 0;
 
-  // Build a solvable expression using 3-5 numbers
-  const numCount = randInt(3, 5);
-  const indices = [];
-  const pool = [...Array(6).keys()];
-  for (let i = 0; i < numCount; i++) {
-    const idx = Math.floor(rng() * pool.length);
-    indices.push(pool[idx]);
-    pool.splice(idx, 1);
-  }
-  const chosenNums = indices.map(i => available[i]);
-
-  // Build expression tree and compute target
-  let result = chosenNums[0];
-  const ops = ['+', '-', '*'];
-  const exprParts = [String(chosenNums[0])];
-
-  for (let i = 1; i < chosenNums.length; i++) {
-    const op = pick(ops);
-    const n = chosenNums[i];
-    if (op === '+') {
-      result += n;
-      exprParts.push('+', String(n));
-    } else if (op === '-') {
-      result -= n;
-      exprParts.push('-', String(n));
-    } else {
-      result *= n;
-      // Wrap previous in parens for clarity
-      const prev = exprParts.join(' ');
-      exprParts.length = 0;
-      exprParts.push('(' + prev + ')', '*', String(n));
+  do {
+    // Pick 2 large, 4 small
+    available = [];
+    const usedLarge = new Set();
+    for (let i = 0; i < 2; i++) {
+      let n;
+      do { n = pick(largeNums); } while (usedLarge.has(n));
+      usedLarge.add(n);
+      available.push(n);
     }
-  }
+    for (let i = 0; i < 4; i++) {
+      available.push(pick(smallNums));
+    }
 
-  // Ensure target is in a good range (100-999) and positive
-  let target = result;
-  let attempts = 0;
-  while ((target < 100 || target > 999 || target !== Math.floor(target) || target <= 0) && attempts < 50) {
-    // Regenerate with different ops
-    result = chosenNums[0];
-    exprParts.length = 0;
-    exprParts.push(String(chosenNums[0]));
+    // Build a solvable expression using 3-5 numbers, must include at least one *
+    const numCount = randInt(3, 5);
+    const indices = [];
+    const pool = [...Array(6).keys()];
+    for (let i = 0; i < numCount; i++) {
+      const idx = Math.floor(rng() * pool.length);
+      indices.push(pool[idx]);
+      pool.splice(idx, 1);
+    }
+    const chosenNums = indices.map(i => available[i]);
+
+    // Build expression — guarantee at least one multiplication
+    let result = chosenNums[0];
+    const opsWithMul = ['+', '-', '*'];
+    exprParts = [String(chosenNums[0])];
+    let hasMul = false;
+
     for (let i = 1; i < chosenNums.length; i++) {
-      const op = pick(['+', '-', '*', '+', '+']);
+      const isLast = i === chosenNums.length - 1;
+      let op;
+      if (isLast && !hasMul) {
+        op = '*';
+      } else {
+        op = pick(opsWithMul);
+      }
       const n = chosenNums[i];
-      if (op === '+') { result += n; exprParts.push('+', String(n)); }
-      else if (op === '-') { result -= n; exprParts.push('-', String(n)); }
-      else { result *= n; const prev = exprParts.join(' '); exprParts.length = 0; exprParts.push('(' + prev + ')', '*', String(n)); }
+      if (op === '+') {
+        result += n;
+        exprParts.push('+', String(n));
+      } else if (op === '-') {
+        result -= n;
+        exprParts.push('-', String(n));
+      } else {
+        result *= n;
+        hasMul = true;
+        const prev = exprParts.join(' ');
+        exprParts.length = 0;
+        exprParts.push('(' + prev + ')', '*', String(n));
+      }
     }
-    target = result;
-    attempts++;
-  }
 
-  // Fallback: if we still can't get a good target, use simple addition + multiplication
-  if (target < 100 || target > 999 || target !== Math.floor(target) || target <= 0) {
-    target = available[0] * available[2] + available[1] + available[3];
-    if (target < 100 || target > 999) {
-      target = available[0] * available[3] + available[1] * available[2];
+    target = result;
+
+    // Retry with different ops if target out of range
+    let attempts = 0;
+    while ((target < 100 || target > 999 || target !== Math.floor(target) || target <= 0 || canReachByAdding(available, target)) && attempts < 50) {
+      result = chosenNums[0];
+      exprParts.length = 0;
+      exprParts.push(String(chosenNums[0]));
+      hasMul = false;
+      for (let i = 1; i < chosenNums.length; i++) {
+        const isLast = i === chosenNums.length - 1;
+        let op;
+        if (isLast && !hasMul) {
+          op = '*';
+        } else {
+          op = pick(['+', '-', '*']);
+        }
+        const n = chosenNums[i];
+        if (op === '+') { result += n; exprParts.push('+', String(n)); }
+        else if (op === '-') { result -= n; exprParts.push('-', String(n)); }
+        else { result *= n; hasMul = true; const prev = exprParts.join(' '); exprParts.length = 0; exprParts.push('(' + prev + ')', '*', String(n)); }
+      }
+      target = result;
+      attempts++;
     }
-    if (target < 100) target = available[0] * (available[2] + available[3]) + available[1];
-    if (target > 999) target = available[0] + available[1] * available[2] + available[3];
-  }
+
+    // Fallback: force a multiplication-based target
+    if (target < 100 || target > 999 || target !== Math.floor(target) || target <= 0) {
+      target = available[0] * available[2] + available[1] + available[3];
+      if (target < 100 || target > 999) {
+        target = available[0] * available[3] + available[1] * available[2];
+      }
+      if (target < 100) target = available[0] * (available[2] + available[3]) + available[1];
+      if (target > 999) target = available[0] + available[1] * available[2] + available[3];
+    }
+
+    outerAttempts++;
+  } while (canReachByAdding(available, Math.abs(Math.floor(target))) && outerAttempts < 20);
 
   // Sort available for display
   available.sort((a, b) => a - b);
